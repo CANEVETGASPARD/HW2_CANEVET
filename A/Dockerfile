@@ -32,6 +32,7 @@ RUN set -ex && \
     pip install pandas && \
     pip install matplotlib && \
     pip install numpy && \
+    pip install nltk && \
     apt-get remove -y curl bzip2 && \
     apt-get autoremove -y && \
     apt-get clean
