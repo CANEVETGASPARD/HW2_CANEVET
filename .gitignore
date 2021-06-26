@@ -131,3 +131,4 @@ dmypy.json
 A/spam-datasets
 .idea/
 B/mnist-datasets
+*.npy
