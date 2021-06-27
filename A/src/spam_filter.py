@@ -2,7 +2,9 @@ from pyspark.sql import SparkSession
 from pyspark.sql.functions import lit, rand
 from pyspark.ml import Pipeline
 from pyspark.ml.classification import LogisticRegression
+from pyspark.ml.evaluation import BinaryClassificationEvaluator
 from pyspark.ml.feature import HashingTF, IDF, Tokenizer, StringIndexer,StopWordsRemover
+from pyspark.ml.tuning import TrainValidationSplit, ParamGridBuilder
 from model.PunctuationRemover import PunctuationRemover
 import nltk
 import numpy as np
@@ -36,26 +38,28 @@ stopWordRemover = StopWordsRemover(inputCol=tokenizer.getOutputCol(),outputCol="
 hashingTF = HashingTF(inputCol=stopWordRemover.getOutputCol(), outputCol="tf")
 idf = IDF(inputCol=hashingTF.getOutputCol(), outputCol="features",minDocFreq=5)
 labelStringIndexer = StringIndexer(inputCol = "category", outputCol = "label")
-pipeline = Pipeline(stages=[punctuationRemover,tokenizer,stopWordRemover,hashingTF,idf,labelStringIndexer])
+lr = LogisticRegression(maxIter=10)
+pipeline = Pipeline(stages=[punctuationRemover,tokenizer,stopWordRemover,hashingTF,idf,labelStringIndexer,lr])
 
-#fit the first pipeline and transform test and train dataset -> column (sentence,category,words,tf,features,label)
-NUMBEROFFEATURES = np.arange(1000,20000,1000)
-print(NUMBEROFFEATURES)
-ACCURACY = []
 
-for nbrFeatures in NUMBEROFFEATURES:
-    pipeline.getStages()[3].setNumFeatures(nbrFeatures)
-    pipelineFitted = pipeline.fit(full_train_dataset)
-    train_df = pipelineFitted.transform(full_train_dataset)
-    test_df = pipelineFitted.transform(test_dataset)
+paramGrid = ParamGridBuilder() \
+    .addGrid(hashingTF.numFeatures, np.arange(1000,20000,4000)) \
+    .addGrid(lr.regParam, [0.1,0.05,0.01]) \
+    .build()
 
-    # logistic regression model fit with the dataset made with second pipeline
-    lr = LogisticRegression(maxIter=10,featuresCol="features",labelCol="label")
-    model = lr.fit(train_df)
-    predictions = model.transform(test_df)
 
-    accuracy = predictions.filter(predictions.label == predictions.prediction).count() / float(test_df.count())
-    print(f'Number of feature: {nbrFeatures}, accuracy: {accuracy}')
-    ACCURACY.append(accuracy)
+tvs = TrainValidationSplit(estimator=pipeline,
+                           estimatorParamMaps=paramGrid,
+                           evaluator=BinaryClassificationEvaluator(),
+                           # 80% of the data will be used for training, 20% for validation.
+                           trainRatio=0.8)
+
+# Run cross-validation, and choose the best set of parameters.
+cvModel = tvs.fit(full_train_dataset)
+predictions = cvModel.transform(test_dataset)
+best_model = cvModel.bestModel
+
+accuracy = predictions.filter(predictions.label == predictions.prediction).count() / float(test_dataset.count())
+print(f'TF number of features: {best_model.stages[3].getNumFeatures()}, logistic regression regression parameters: {best_model.stages[6].getRegParam()}, Accuracy: {accuracy}')
 
 spark.stop()
