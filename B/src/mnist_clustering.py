@@ -1,6 +1,7 @@
 from pyspark.sql import SparkSession
 from pyspark.ml.feature import VectorAssembler, StandardScaler
 from pyspark.ml import Pipeline
+from pyspark.ml.tuning import TrainValidationSplit, ParamGridBuilder
 from pyspark.ml.clustering import KMeans
 from pyspark.ml.evaluation import ClusteringEvaluator
 import matplotlib.pyplot as plt
@@ -16,30 +17,26 @@ mnist_df = spark.read.csv("B/mnist-datasets/mnist_test.csv",inferSchema=True)
 
 vecAssembler = VectorAssembler(inputCols=mnist_df.columns , outputCol="features")
 stdScalar = StandardScaler(inputCol="features", outputCol="scaledFeatures",withStd=True, withMean=True)
-pipeline = Pipeline(stages=[vecAssembler,stdScalar])
+kmeans = KMeans(maxIter =30,seed=1)
+pipeline = Pipeline(stages=[vecAssembler,stdScalar,kmeans])
 
-pipelineFitted = pipeline.fit(mnist_df)
-mnist_df_scaled = pipelineFitted.transform(mnist_df)
+paramGrid = ParamGridBuilder()\
+    .addGrid(kmeans.k, [4,5,6,7,8,9,10,11,12,13]) \
+    .build()
 
-K = [4,5,6,7,8,9,10,11,12,13]
+# In this case the estimator is simply the linear regression.
+# A TrainValidationSplit requires an Estimator, a set of Estimator ParamMaps, and an Evaluator.
+tvs = TrainValidationSplit(estimator=pipeline,
+                           estimatorParamMaps=paramGrid,
+                           evaluator=ClusteringEvaluator(),
+                           # 80% of the data will be used for training, 20% for validation.
+                           trainRatio=0.8)
 
+# Run TrainValidationSplit, and choose the best set of parameters.
+model = tvs.fit(mnist_df)
+print(f"best number of cluster k: {model.bestModel.stages[2].getK()}")
+centers = model.bestModel.stages[2].clusterCenters()
 
-"""for k in K:
-    kmeans = KMeans().setK(k).setMaxIter(10).setSeed(1).setFeaturesCol("scaledFeatures")
-    model = kmeans.fit(mnist_df_scaled)
-    # Make predictions
-    predictions = model.transform(mnist_df_scaled)
-
-    # Evaluate clustering by computing Silhouette score
-    evaluator = ClusteringEvaluator()
-
-    silhouette = evaluator.evaluate(predictions)
-    print(f"For k = {k}, silhouette with squared euclidean distance = {silhouette}")"""
-
-kmeans = KMeans().setK(10).setMaxIter(30).setSeed(1).setFeaturesCol("features")
-model = kmeans.fit(mnist_df_scaled)
-centers = model.clusterCenters()
-
-np.save("B/centroidsNonScaled",centers)
+np.save("B/centroids",centers)
 
 spark.stop()
