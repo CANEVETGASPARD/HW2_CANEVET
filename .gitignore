@@ -128,7 +128,6 @@ dmypy.json
 # Pyre type checker
 .pyre/
 
-A/spam-datasets
 .idea/
-B/mnist-datasets
 *.npy
+*datasets
