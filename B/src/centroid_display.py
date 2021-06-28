@@ -13,7 +13,7 @@ def display_pictures(height,width,pictures):
                 col = 0
                 row += 1
 
-            picture_matrix[col, row] = pictures[picture][pixel]
+            picture_matrix[row, col] = pictures[picture][pixel]
             col += 1
         plt.imshow(picture_matrix,cmap="gray_r")
         plt.show()

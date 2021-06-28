@@ -2,7 +2,7 @@ from pyspark.sql import SparkSession
 from pyspark.ml.feature import VectorAssembler, StandardScaler
 from pyspark.ml import Pipeline
 from pyspark.ml.tuning import TrainValidationSplit, ParamGridBuilder
-from pyspark.ml.clustering import KMeans
+from pyspark.ml.clustering import KMeans, BisectingKMeans
 from pyspark.ml.evaluation import ClusteringEvaluator
 import matplotlib.pyplot as plt
 import numpy as np
@@ -17,15 +17,14 @@ mnist_df = spark.read.csv("B/mnist-datasets/mnist_test.csv",inferSchema=True)
 
 vecAssembler = VectorAssembler(inputCols=mnist_df.columns , outputCol="features")
 stdScalar = StandardScaler(inputCol="features", outputCol="scaledFeatures",withStd=True, withMean=True)
+bikmeans = BisectingKMeans(maxIter =30,seed=1) #not used this time
 kmeans = KMeans(maxIter =30,seed=1)
 pipeline = Pipeline(stages=[vecAssembler,stdScalar,kmeans])
 
 paramGrid = ParamGridBuilder()\
-    .addGrid(kmeans.k, [4,5,6,7,8,9,10,11,12,13]) \
+    .addGrid(kmeans.k, [7,8,9,10,11,12]) \
     .build()
 
-# In this case the estimator is simply the linear regression.
-# A TrainValidationSplit requires an Estimator, a set of Estimator ParamMaps, and an Evaluator.
 tvs = TrainValidationSplit(estimator=pipeline,
                            estimatorParamMaps=paramGrid,
                            evaluator=ClusteringEvaluator(),
