@@ -1,14 +1,13 @@
 from pyspark.sql import SparkSession
 from pyspark.sql.functions import lit, rand
 from pyspark.ml import Pipeline
-from pyspark.ml.classification import LogisticRegression
+from pyspark.ml.classification import LogisticRegression, NaiveBayes, LinearSVC
 from pyspark.ml.evaluation import BinaryClassificationEvaluator
 from pyspark.ml.feature import HashingTF, IDF, Tokenizer, StringIndexer,StopWordsRemover
 from pyspark.ml.tuning import TrainValidationSplit, ParamGridBuilder
 from model.PunctuationRemover import PunctuationRemover
 import nltk
 import numpy as np
-import matplotlib.pyplot as plt
 
 spark = SparkSession.builder.master("local[1]").appName('spam_filter').getOrCreate()
 
@@ -39,10 +38,12 @@ hashingTF = HashingTF(inputCol=stopWordRemover.getOutputCol(), outputCol="tf")
 idf = IDF(inputCol=hashingTF.getOutputCol(), outputCol="features",minDocFreq=5)
 labelStringIndexer = StringIndexer(inputCol = "category", outputCol = "label")
 lr = LogisticRegression(maxIter=10)
-pipeline = Pipeline(stages=[punctuationRemover,tokenizer,stopWordRemover,hashingTF,idf,labelStringIndexer,lr])
+nb = NaiveBayes()
+lsvc = LinearSVC(maxIter=10)
+pipeline = Pipeline(stages=[punctuationRemover,tokenizer,stopWordRemover,hashingTF,idf,labelStringIndexer,lsvc]) #change model to test different ml model
 
-
-paramGrid = ParamGridBuilder() \
+#un comment if you want to test the optimisation method
+"""paramGrid = ParamGridBuilder() \
     .addGrid(hashingTF.numFeatures, np.arange(1000,20000,4000)) \
     .addGrid(lr.regParam, [0.1,0.05,0.01]) \
     .build()
@@ -61,5 +62,14 @@ best_model = cvModel.bestModel
 
 accuracy = predictions.filter(predictions.label == predictions.prediction).count() / float(test_dataset.count())
 print(f'TF number of features: {best_model.stages[3].getNumFeatures()}, logistic regression regression parameters: {best_model.stages[6].getRegParam()}, Accuracy: {accuracy}')
+"""
 
+#uncoment if you want to test a method without performing optimisation. You should first choose you method in the pipeline
+# and then choose you parameters
+pipeline.getStages()[3].setNumFeatures(13000)
+pipeline.getStages()[6].setRegParam(0.1) # for logistic regression and linear SVC
+model = pipeline.fit(full_train_dataset)
+predictions = model.transform(test_dataset)
+accuracy = predictions.filter(predictions.label == predictions.prediction).count() / float(test_dataset.count())
+print("accuracy: ",accuracy)
 spark.stop()
