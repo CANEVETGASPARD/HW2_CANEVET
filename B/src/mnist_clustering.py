@@ -4,7 +4,6 @@ from pyspark.ml import Pipeline
 from pyspark.ml.tuning import TrainValidationSplit, ParamGridBuilder
 from pyspark.ml.clustering import KMeans, BisectingKMeans
 from pyspark.ml.evaluation import ClusteringEvaluator
-import matplotlib.pyplot as plt
 import numpy as np
 
 spark = SparkSession.builder.master("local[1]").appName('mnist clustering').getOrCreate()
@@ -19,11 +18,17 @@ vecAssembler = VectorAssembler(inputCols=mnist_df.columns , outputCol="features"
 stdScalar = StandardScaler(inputCol="features", outputCol="scaledFeatures",withStd=True, withMean=True)
 bikmeans = BisectingKMeans(maxIter =30,seed=1) #not used this time
 kmeans = KMeans(maxIter =30,seed=1)
-pipeline = Pipeline(stages=[vecAssembler,stdScalar,kmeans])
+pipeline = Pipeline(stages=[vecAssembler,stdScalar,bikmeans])
 
+#grid test for bisecting kmeans
 paramGrid = ParamGridBuilder()\
-    .addGrid(kmeans.k, [7,8,9,10,11,12]) \
+    .addGrid(bikmeans.k, [7,8,9,10,11,12]) \
     .build()
+
+#grid test for kmeans
+"""paramGrid = ParamGridBuilder()\
+    .addGrid(kmeans.k, [7,8,9,10,11,12]) \
+    .build()"""
 
 tvs = TrainValidationSplit(estimator=pipeline,
                            estimatorParamMaps=paramGrid,
@@ -36,6 +41,6 @@ model = tvs.fit(mnist_df)
 print(f"best number of cluster k: {model.bestModel.stages[2].getK()}")
 centers = model.bestModel.stages[2].clusterCenters()
 
-np.save("B/centroids",centers)
+np.save("B/centroidsbisec",centers)
 
 spark.stop()
